@@ -167,6 +167,11 @@ function init(): void {
       initTimeSlider(canvasContainer, waterfallState!);
       renderWaterfall(waterfallState!);
 
+      // Create AudioContext during user gesture (before async sf3 loading)
+      if (playerState && !playerState.audioCtx) {
+        playerState.audioCtx = new AudioContext();
+      }
+
       // Load SoundFont asynchronously (non-blocking)
       initSoundFontPlayer(playerState!).then((ok) => {
         if (!ok && elements) {
