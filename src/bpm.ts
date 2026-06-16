@@ -12,6 +12,42 @@ export interface BeatGrid {
 }
 
 const LOCAL_WINDOW = 3;
+const CHUNK_SIZE = 10; // 10-second blocks
+
+/** Pre-built chunk index for O(1) moment lookups. */
+class NoteChunkIndex {
+  private chunks: Note[][];
+  private blockSize: number;
+
+  constructor(notes: Note[], totalDuration: number) {
+    this.blockSize = CHUNK_SIZE;
+    const numBlocks = Math.max(1, Math.ceil(totalDuration / CHUNK_SIZE));
+    this.chunks = new Array(numBlocks);
+    for (let i = 0; i < numBlocks; i++) this.chunks[i] = [];
+
+    for (const note of notes) {
+      const startB = Math.floor(note.onset / CHUNK_SIZE);
+      const endB = Math.floor(note.offset / CHUNK_SIZE);
+      for (let b = Math.max(0, startB); b <= Math.min(numBlocks - 1, endB); b++) {
+        this.chunks[b].push(note);
+      }
+    }
+  }
+
+  findLowestActiveNote(moment: number): Note | null {
+    const bi = Math.floor(moment / this.blockSize);
+    if (bi < 0 || bi >= this.chunks.length) return null;
+    let lowest: Note | null = null;
+    for (const note of this.chunks[bi]) {
+      if (note.onset <= moment && note.offset > moment) {
+        if (lowest === null || note.pitch < lowest.pitch) {
+          lowest = note;
+        }
+      }
+    }
+    return lowest;
+  }
+}
 
 export function createBeatGrid(): BeatGrid {
   return { bpm: 0, barLines: [] };
@@ -28,6 +64,9 @@ export function buildBeatGrid(
 
   const totalDuration = notes[notes.length - 1]?.offset ?? 0;
   const barLines: BarLine[] = userBars.map((b) => ({ ...b }));
+
+  // Build chunk index once
+  const chunkIndex = new NoteChunkIndex(notes, totalDuration);
 
   while (true) {
     const confirmed = barLines.filter((b) => b.confirmed);
@@ -53,8 +92,8 @@ export function buildBeatGrid(
       continue;
     }
 
-    // Phase 1: lowest-note heuristic (only method for confirmed bar lines)
-    const heuristicOnset = findBarByLowestNote(notes, predicted, T);
+    // Lowest-note heuristic
+    const heuristicOnset = findBarByLowestNote(chunkIndex, predicted, T);
     if (heuristicOnset !== null) {
       barLines.push({ time: heuristicOnset, measureNumber: nextMeasure, confirmed: true });
     } else {
@@ -97,16 +136,16 @@ function getConfirmedDiffs(barLines: BarLine[]): number[] {
 }
 
 function findBarByLowestNote(
-  notes: Note[],
+  chunkIndex: NoteChunkIndex,
   predicted: number,
   barDuration: number
 ): number | null {
-  const offsets = [-0.1, 0, 0.1];
+  const offsets = [-0.3, 0, 0.3];
   const candidates: number[] = [];
 
   for (const offset of offsets) {
     const moment = predicted + offset * barDuration;
-    const lowest = findLowestActiveNote(notes, moment);
+    const lowest = chunkIndex.findLowestActiveNote(moment);
     if (lowest !== null) {
       candidates.push(lowest.onset);
     }
@@ -128,16 +167,4 @@ function findBarByLowestNote(
   }
   console.log(`[Heuristic] t=${predicted.toFixed(2)} candidates=[${candidates.map(c => c.toFixed(2)).join(', ')}] → picked ${best.toFixed(2)} (dist=${bestDist.toFixed(3)}s)`);
   return best;
-}
-
-function findLowestActiveNote(notes: Note[], moment: number): Note | null {
-  let lowest: Note | null = null;
-  for (const note of notes) {
-    if (note.onset <= moment && note.offset > moment) {
-      if (lowest === null || note.pitch < lowest.pitch) {
-        lowest = note;
-      }
-    }
-  }
-  return lowest;
 }
