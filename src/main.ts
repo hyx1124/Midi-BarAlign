@@ -122,7 +122,7 @@ function init(): void {
   const importFileInput = document.createElement("input");
   importFileInput.type = "file";
   importFileInput.accept = ".json";
-  importFileInput.style.display = "none";
+  importFileInput.style.cssText = "position:absolute;left:-9999px;top:0;";
   document.body.appendChild(importFileInput);
 
   elements.importBtn.addEventListener("click", () => importFileInput.click());
