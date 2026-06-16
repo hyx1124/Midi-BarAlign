@@ -12,40 +12,75 @@ export interface BeatGrid {
 }
 
 const LOCAL_WINDOW = 3;
-const CHUNK_SIZE = 10; // 10-second blocks
+const CHUNK_SIZE = 10;
+const SCAN_INTERVAL = 0.5;
 
-/** Pre-built chunk index for O(1) moment lookups. */
 class NoteChunkIndex {
   private chunks: Note[][];
-  private blockSize: number;
 
   constructor(notes: Note[], totalDuration: number) {
-    this.blockSize = CHUNK_SIZE;
     const numBlocks = Math.max(1, Math.ceil(totalDuration / CHUNK_SIZE));
     this.chunks = new Array(numBlocks);
     for (let i = 0; i < numBlocks; i++) this.chunks[i] = [];
 
     for (const note of notes) {
-      const startB = Math.floor(note.onset / CHUNK_SIZE);
-      const endB = Math.floor(note.offset / CHUNK_SIZE);
-      for (let b = Math.max(0, startB); b <= Math.min(numBlocks - 1, endB); b++) {
+      const s = Math.floor(note.onset / CHUNK_SIZE);
+      const e = Math.floor(note.offset / CHUNK_SIZE);
+      for (let b = Math.max(0, s); b <= Math.min(numBlocks - 1, e); b++) {
         this.chunks[b].push(note);
       }
     }
   }
 
-  findLowestActiveNote(moment: number): Note | null {
-    const bi = Math.floor(moment / this.blockSize);
+  findLowest(moment: number): Note | null {
+    const bi = Math.floor(moment / CHUNK_SIZE);
     if (bi < 0 || bi >= this.chunks.length) return null;
     let lowest: Note | null = null;
-    for (const note of this.chunks[bi]) {
-      if (note.onset <= moment && note.offset > moment) {
-        if (lowest === null || note.pitch < lowest.pitch) {
-          lowest = note;
-        }
+    for (const n of this.chunks[bi]) {
+      if (n.onset <= moment && n.offset > moment) {
+        if (lowest === null || n.pitch < lowest.pitch) lowest = n;
       }
     }
     return lowest;
+  }
+}
+
+class BassPoolIndex {
+  private pools: Map<number, number>[];
+
+  constructor(chunkIndex: NoteChunkIndex, totalDuration: number) {
+    const numBlocks = Math.max(1, Math.ceil(totalDuration / CHUNK_SIZE));
+    this.pools = new Array(numBlocks);
+    for (let i = 0; i < numBlocks; i++) this.pools[i] = new Map();
+
+    for (let t = 0; t < totalDuration; t += SCAN_INTERVAL) {
+      const lowest = chunkIndex.findLowest(t);
+      if (!lowest) continue;
+      const bi = Math.floor(t / CHUNK_SIZE);
+      if (bi < numBlocks && !this.pools[bi].has(lowest.onset)) {
+        this.pools[bi].set(lowest.onset, lowest.pitch);
+      }
+    }
+  }
+
+  findClosest(target: number, minOnset: number): number | null {
+    const centerBi = Math.floor(target / CHUNK_SIZE);
+    let bestOnset: number | null = null;
+    let bestDist = Infinity;
+
+    for (let db = -1; db <= 1; db++) {
+      const bi = centerBi + db;
+      if (bi < 0 || bi >= this.pools.length) continue;
+      for (const onset of this.pools[bi].keys()) {
+        if (onset < minOnset) continue;
+        const dist = Math.abs(onset - target);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestOnset = onset;
+        }
+      }
+    }
+    return bestOnset;
   }
 }
 
@@ -65,8 +100,9 @@ export function buildBeatGrid(
   const totalDuration = notes[notes.length - 1]?.offset ?? 0;
   const barLines: BarLine[] = userBars.map((b) => ({ ...b }));
 
-  // Build chunk index once
   const chunkIndex = new NoteChunkIndex(notes, totalDuration);
+  const bassPool = new BassPoolIndex(chunkIndex, totalDuration);
+  console.log(`[BPM] Bass pool built`);
 
   while (true) {
     const confirmed = barLines.filter((b) => b.confirmed);
@@ -74,6 +110,7 @@ export function buildBeatGrid(
 
     const recent = confirmed.slice(-LOCAL_WINDOW);
     const T = (recent[recent.length - 1].time - recent[0].time) / (recent.length - 1);
+    if (T <= 0) break;
 
     const lastBar = barLines[barLines.length - 1];
     const nextMeasure = lastBar.measureNumber + 1;
@@ -92,10 +129,11 @@ export function buildBeatGrid(
       continue;
     }
 
-    // Lowest-note heuristic
-    const heuristicOnset = findBarByLowestNote(chunkIndex, predicted, T);
-    if (heuristicOnset !== null) {
-      barLines.push({ time: heuristicOnset, measureNumber: nextMeasure, confirmed: true });
+    const minOnset = lastBar.time + Math.max(0.5 * T, 1.0);
+    const hit = bassPool.findClosest(predicted, minOnset);
+
+    if (hit !== null) {
+      barLines.push({ time: hit, measureNumber: nextMeasure, confirmed: true });
     } else {
       barLines.push({ time: predicted, measureNumber: nextMeasure, confirmed: false });
     }
@@ -109,6 +147,7 @@ export function buildBeatGrid(
       ? Math.round((240 / (confirmedDiffs.reduce((a, b) => a + b, 0) / confirmedDiffs.length)) * 10) / 10
       : 0;
 
+  console.log(`[BPM] ${barLines.length} bar lines, BPM=${displayBpm}`);
   return { bpm: displayBpm, barLines };
 }
 
@@ -133,38 +172,4 @@ function getConfirmedDiffs(barLines: BarLine[]): number[] {
     diffs.push(confirmed[i].time - confirmed[i - 1].time);
   }
   return diffs;
-}
-
-function findBarByLowestNote(
-  chunkIndex: NoteChunkIndex,
-  predicted: number,
-  barDuration: number
-): number | null {
-  const offsets = [-0.3, 0, 0.3];
-  const candidates: number[] = [];
-
-  for (const offset of offsets) {
-    const moment = predicted + offset * barDuration;
-    const lowest = chunkIndex.findLowestActiveNote(moment);
-    if (lowest !== null) {
-      candidates.push(lowest.onset);
-    }
-  }
-
-  if (candidates.length === 0) {
-    console.log(`[Heuristic] No active notes at any of 3 checkpoints near t=${predicted.toFixed(2)}`);
-    return null;
-  }
-
-  let best = candidates[0];
-  let bestDist = Math.abs(best - predicted);
-  for (let i = 1; i < candidates.length; i++) {
-    const dist = Math.abs(candidates[i] - predicted);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = candidates[i];
-    }
-  }
-  console.log(`[Heuristic] t=${predicted.toFixed(2)} candidates=[${candidates.map(c => c.toFixed(2)).join(', ')}] → picked ${best.toFixed(2)} (dist=${bestDist.toFixed(3)}s)`);
-  return best;
 }
