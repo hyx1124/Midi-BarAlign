@@ -37,10 +37,10 @@ function findVisibleNoteRange(
   timeMin: number,
   timeMax: number
 ): [number, number] {
-  // Binary search for first note whose onset >= timeMin (with generous buffer for long notes)
+  // Use generous buffer for notes with long durations (>30s uncommon)
+  const searchMin = timeMin - 30;
   let lo = 0;
   let hi = notes.length;
-  const searchMin = timeMin - 5; // 5s buffer for long notes starting before window
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
     if (notes[mid].onset < searchMin) {
