@@ -17,7 +17,7 @@ import {
   initSoundFontPlayer,
 } from "./player";
 import type { MidiInfo } from "./types";
-import type { WaterfallState } from "./waterfall";
+import type { WaterfallState, SliderBar } from "./waterfall";
 import type { SidebarElements } from "./sidebar";
 import type { PlayerState } from "./player";
 
@@ -25,6 +25,7 @@ let midiInfo: MidiInfo | null = null;
 let waterfallState: WaterfallState | null = null;
 let playerState: PlayerState | null = null;
 let elements: SidebarElements | null = null;
+let sliderBar: SliderBar | null = null;
 
 export function getMidiInfo(): MidiInfo | null {
   return midiInfo;
@@ -73,12 +74,11 @@ function init(): void {
     if (!waterfallState || !elements) return;
     waterfallState.currentTime = time;
     renderWaterfall(waterfallState);
-    // sync time slider
-    const slider = document.getElementById("time-slider") as HTMLInputElement;
-    if (slider) {
-      slider.value = String(time);
+    // sync time slider (one-way, no re-trigger)
+    if (sliderBar) {
+      sliderBar.slider.value = String(time);
+      sliderBar.timeDisplay.textContent = getFormattedTime(playerState!);
     }
-    elements.timeDisplay.textContent = getFormattedTime(playerState!);
   };
 
   // --- Play/Pause ---
@@ -90,6 +90,12 @@ function init(): void {
       await startPlayback(playerState, midiInfo.notes, midiInfo.duration);
     }
     updatePlayPauseBtn();
+    // Disable slider during playback, enable when stopped
+    if (sliderBar) {
+      sliderBar.slider.disabled = playerState.isPlaying;
+      sliderBar.slider.style.opacity = playerState.isPlaying ? "0.4" : "1";
+      sliderBar.slider.style.cursor = playerState.isPlaying ? "default" : "pointer";
+    }
   });
 
   // --- Reset time ---
@@ -97,6 +103,11 @@ function init(): void {
     if (!playerState) return;
     stopPlayback(playerState);
     updatePlayPauseBtn();
+    if (sliderBar) {
+      sliderBar.slider.disabled = false;
+      sliderBar.slider.style.opacity = "1";
+      sliderBar.slider.style.cursor = "pointer";
+    }
   });
 
   // --- Speed buttons ---

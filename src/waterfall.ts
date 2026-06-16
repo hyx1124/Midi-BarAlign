@@ -146,14 +146,15 @@ export function renderWaterfall(state: WaterfallState): void {
 
   ctx.restore(); // undo clip
 
-  // Draw time labels at bottom
+  // Draw time labels at bottom (absolute audio time, moves with waterfall)
   ctx.fillStyle = "#aaa";
   ctx.font = "10px -apple-system, sans-serif";
   ctx.textAlign = "center";
   const timeStep = Math.max(1, Math.floor(visibleTimeWindow / 5));
   for (let t = 0; t <= visibleTimeWindow; t += timeStep) {
     const x = (t / visibleTimeWindow) * W;
-    ctx.fillText(`${t.toFixed(0)}s`, x, H - 4);
+    const absTime = currentTime + t;
+    ctx.fillText(`${absTime.toFixed(0)}s`, x, H - 4);
   }
 
   // Draw judgment line (on top of everything, full height)
@@ -228,35 +229,60 @@ function syncSlider(state: WaterfallState): void {
   sliderSyncing = false;
 }
 
+export interface SliderBar {
+  slider: HTMLInputElement;
+  timeDisplay: HTMLSpanElement;
+}
+
 export function initTimeSlider(
   container: HTMLElement,
   state: WaterfallState
-): HTMLInputElement {
-  const slider = document.getElementById("time-slider") as HTMLInputElement;
-  if (!slider) {
+): SliderBar {
+  const wrapper = document.getElementById("slider-bar") as HTMLDivElement;
+  if (!wrapper) {
+    const w = document.createElement("div");
+    w.id = "slider-bar";
+    w.style.cssText =
+      "display:none; align-items:center; border-top:1px solid #eee; background:#fafafa;";
+
     const s = document.createElement("input");
     s.type = "range";
     s.id = "time-slider";
     s.style.cssText =
-      "display:block; width:100%; height:20px; margin:0; padding:0 10px; border:none; " +
-      "background:#fafafa; cursor:pointer; border-top:1px solid #eee; box-sizing:border-box; " +
+      "flex:1; height:20px; margin:0; padding:0 10px; border:none; " +
+      "background:transparent; cursor:pointer; " +
       "-webkit-appearance:none; appearance:none;";
-    container.appendChild(s);
+
+    const td = document.createElement("span");
+    td.id = "time-display-slider";
+    td.style.cssText =
+      "flex-shrink:0; padding:0 10px; color:#888; font-size:12px; white-space:nowrap;";
+    td.textContent = "0.0s / 0.0s";
+
+    w.appendChild(s);
+    w.appendChild(td);
+    container.appendChild(w);
     return initTimeSlider(container, state);
   }
 
-  slider.style.display = "block";
+  wrapper.style.display = "flex";
+  const slider = wrapper.querySelector("#time-slider") as HTMLInputElement;
+  const timeDisplay = wrapper.querySelector("#time-display-slider") as HTMLSpanElement;
+
   slider.min = "0";
   slider.max = String(Math.max(0.1, state.totalDuration));
   slider.step = "0.1";
   slider.value = String(state.currentTime);
 
-  slider.addEventListener("input", () => {
-    state.currentTime = parseFloat(slider.value);
+  // Remove old listener by cloning
+  const newSlider = slider.cloneNode(true) as HTMLInputElement;
+  newSlider.addEventListener("input", () => {
+    state.currentTime = parseFloat(newSlider.value);
     renderWaterfall(state);
   });
+  slider.replaceWith(newSlider);
 
-  return slider;
+  return { slider: newSlider, timeDisplay };
 }
 
 export function setVisibleTimeWindow(state: WaterfallState, seconds: number): void {
