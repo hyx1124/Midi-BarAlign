@@ -242,7 +242,13 @@ export function initWaterfall(container: HTMLElement): WaterfallState {
 
     for (let i = 0; i < state.notes.length; i++) {
       const note = state.notes[i];
-      const timeDist = Math.abs(note.onset - clickTime);
+      // Time distance: 0 if click falls within note duration, else distance to nearest edge
+      let timeDist: number;
+      if (clickTime >= note.onset && clickTime <= note.offset) {
+        timeDist = 0;
+      } else {
+        timeDist = Math.min(Math.abs(note.onset - clickTime), Math.abs(note.offset - clickTime));
+      }
       const pitchDist = Math.abs(note.pitch - clickPitch);
       if (timeDist <= TIME_THRESHOLD && pitchDist <= PITCH_THRESHOLD) {
         if (timeDist < bestDist) {
