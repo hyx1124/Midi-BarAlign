@@ -326,3 +326,11 @@ export function showError(elements: SidebarElements, message: string): void {
   elements.errorBox.style.display = "block";
   elements.infoPanel.style.display = "none";
 }
+
+export function showAnnotationSection(elements: SidebarElements): void {
+  elements.annotationSection.style.display = "block";
+}
+
+export function updateAnnotationCount(elements: SidebarElements, count: number): void {
+  elements.annotationCount.textContent = `${count} 个小节`;
+}

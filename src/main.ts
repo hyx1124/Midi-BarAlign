@@ -1,5 +1,5 @@
 import { parseMidiFile } from "./midiParser";
-import { initSidebar, updateMidiInfo, showError } from "./sidebar";
+import { initSidebar, updateMidiInfo, showError, showAnnotationSection, updateAnnotationCount } from "./sidebar";
 import {
   initWaterfall,
   setWaterfallNotes,
@@ -16,16 +16,23 @@ import {
   getFormattedTime,
   initSoundFontPlayer,
 } from "./player";
-import type { MidiInfo } from "./types";
+import type { MidiInfo, AnnotationState } from "./types";
 import type { WaterfallState, SliderBar } from "./waterfall";
 import type { SidebarElements } from "./sidebar";
 import type { PlayerState } from "./player";
+import {
+  createAnnotationState,
+  toggleAnnotation,
+  clearAnnotations,
+  getAnnotationCount,
+} from "./annotation";
 
 let midiInfo: MidiInfo | null = null;
 let waterfallState: WaterfallState | null = null;
 let playerState: PlayerState | null = null;
 let elements: SidebarElements | null = null;
 let sliderBar: SliderBar | null = null;
+let annotationState: AnnotationState | null = null;
 
 export function getMidiInfo(): MidiInfo | null {
   return midiInfo;
@@ -68,6 +75,22 @@ function init(): void {
 
   // Initialize waterfall (once)
   waterfallState = initWaterfall(canvasContainer);
+
+  // --- Annotation: canvas click -> toggle ---
+  waterfallState.onNoteClick = (noteIndex: number) => {
+    if (!annotationState || !waterfallState || !midiInfo || !elements) return;
+    toggleAnnotation(annotationState, noteIndex, midiInfo.notes);
+    updateAnnotationCount(elements, getAnnotationCount(annotationState));
+    renderWaterfall(waterfallState);
+  };
+
+  // --- Annotation: reset button ---
+  elements.resetBtn.addEventListener("click", () => {
+    if (!annotationState || !waterfallState || !elements) return;
+    clearAnnotations(annotationState);
+    updateAnnotationCount(elements, 0);
+    renderWaterfall(waterfallState);
+  });
 
   // Player onTick: update waterfall and time display
   playerState.onTick = (time: number) => {
@@ -182,6 +205,12 @@ function init(): void {
         stopPlayback(playerState);
         updatePlayPauseBtn();
       }
+
+      // Init / clear annotations
+      annotationState = createAnnotationState();
+      waterfallState!.annotations = annotationState.annotations;
+      showAnnotationSection(elements!);
+      updateAnnotationCount(elements!, 0);
 
       // Show zoom controls
       document.getElementById("zoom-wrapper")!.style.display = "block";

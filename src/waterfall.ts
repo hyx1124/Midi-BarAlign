@@ -11,6 +11,8 @@ export interface WaterfallState {
   totalDuration: number;
   currentTime: number;
   visibleTimeWindow: number;
+  annotations: Map<number, number> | null;
+  onNoteClick: ((noteIndex: number) => void) | null;
 }
 
 const NOTE_RADIUS = 4;
@@ -18,6 +20,7 @@ const JUDGMENT_LINE_COLOR = "#e74c3c";
 const JUDGMENT_LINE_WIDTH = 2;
 const FUTURE_NOTE_COLOR = "#222";
 const CROSSING_NOTE_COLOR = "#555";
+const ANNOTATION_COLOR = "#6A89A7";
 const GRID_LINE_COLOR = "#eee";
 const BG_COLOR = "#fff";
 
@@ -130,8 +133,11 @@ export function renderWaterfall(state: WaterfallState): void {
     const rowTop = ((pitchMax - note.pitch) / pitchCount) * H;
     const noteHeight = rowHeight;
 
-    // Color: future vs crossing
-    if (note.onset >= currentTime) {
+    // Color: annotation takes priority, then future vs crossing
+    if (state.annotations && state.annotations.has(i)) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = ANNOTATION_COLOR;
+    } else if (note.onset >= currentTime) {
       ctx.globalAlpha = 1;
       ctx.fillStyle = FUTURE_NOTE_COLOR;
     } else {
@@ -186,6 +192,8 @@ export function initWaterfall(container: HTMLElement): WaterfallState {
     totalDuration: 0,
     currentTime: 0,
     visibleTimeWindow: 15,
+    annotations: null,
+    onNoteClick: null,
   };
 
   function resize(): void {
@@ -214,6 +222,40 @@ export function initWaterfall(container: HTMLElement): WaterfallState {
     syncSlider(state);
     renderWaterfall(state);
   }, { passive: false });
+
+  // Click-to-annotate: map canvas click to note index
+  canvas.addEventListener("click", (e: MouseEvent) => {
+    if (!state.onNoteClick || !state.notes.length) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
+
+    const clickTime = state.currentTime + (canvasX / state.displayWidth) * state.visibleTimeWindow;
+    const clickPitch = state.pitchMax - (canvasY / state.displayHeight) * (state.pitchMax - state.pitchMin);
+
+    const TIME_THRESHOLD = 0.15; // 150ms
+    const PITCH_THRESHOLD = 0.5; // half semitone
+
+    let bestIdx = -1;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < state.notes.length; i++) {
+      const note = state.notes[i];
+      const timeDist = Math.abs(note.onset - clickTime);
+      const pitchDist = Math.abs(note.pitch - clickPitch);
+      if (timeDist <= TIME_THRESHOLD && pitchDist <= PITCH_THRESHOLD) {
+        if (timeDist < bestDist) {
+          bestDist = timeDist;
+          bestIdx = i;
+        }
+      }
+    }
+
+    if (bestIdx >= 0) {
+      state.onNoteClick(bestIdx);
+    }
+  });
 
   return state;
 }
