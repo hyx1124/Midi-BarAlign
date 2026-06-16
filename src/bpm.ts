@@ -9,20 +9,19 @@ export interface BarLine {
 export interface BeatGrid {
   bpm: number;
   barLines: BarLine[];
-  bpmHistory: number[];
 }
 
-const HISTORY_WINDOW = 5;
 const DEFAULT_THRESHOLD = 0.1; // 100ms
+const TRIM_RATIO = 0.2; // trim 20% from each end
 
 export function createBeatGrid(): BeatGrid {
-  return { bpm: 0, barLines: [], bpmHistory: [] };
+  return { bpm: 0, barLines: [] };
 }
 
 /**
- * Build a beat grid from user annotations.
- * Requires at least 5 annotated downbeats (measures 1-5).
- * Returns null if fewer than 5 annotations.
+ * Build a beat grid from user annotations + algorithm snap.
+ * Uses trimmed-mean of inter-bar intervals for robust BPM estimation.
+ * Requires at least 5 user-annotated downbeats.
  */
 export function buildBeatGrid(
   annotations: Map<number, number>,
@@ -31,71 +30,113 @@ export function buildBeatGrid(
 ): BeatGrid | null {
   if (annotations.size < 5) return null;
 
-  // Extract onsets for the first 5 measures in order
-  const downbeats = getSortedDownbeats(annotations, notes);
-  if (downbeats.length < 5) return null;
+  // --- Phase 1: Collect user-annotated bar lines ---
+  const userBars = getUserBarLines(annotations, notes);
+  if (userBars.length < 5) return null;
 
-  const onsets = downbeats.slice(0, 5).map((d) => d.onset);
-
-  // Compute initial BPM history from intervals between consecutive downbeats
-  const barLines: BarLine[] = [];
-  const bpmHistory: number[] = [];
-
-  for (let i = 0; i < 4; i++) {
-    const interval = onsets[i + 1] - onsets[i];
-    const bpm = 240 / interval;
-    bpmHistory.push(bpm);
-  }
-
-  // First 5 measures are confirmed bar lines (from user annotations)
-  for (let i = 0; i < 5; i++) {
-    barLines.push({ time: onsets[i], measureNumber: i + 1, confirmed: true });
-  }
-
-  // Predictive extension
   const totalDuration = notes[notes.length - 1]?.offset ?? 0;
-  let lastOnset = onsets[4];
-  let measureNum = 6;
+
+  // Seed with user annotations as the initial confirmed bar lines
+  const barLines: BarLine[] = userBars.map((b) => ({ ...b }));
+
+  // --- Phase 2: Iteratively predict and snap ---
+  let lastConfirmedIdx = barLines.length - 1;
 
   while (true) {
-    const rollingBpm = bpmHistory.reduce((a, b) => a + b, 0) / bpmHistory.length;
-    const predicted = lastOnset + 240 / rollingBpm;
+    const diffs = getConfirmedDiffs(barLines);
+    const trimmedMean = trimmedMeanDiff(diffs);
+    if (trimmedMean === null) break;
+
+    const lastBar = barLines[lastConfirmedIdx];
+    const nextMeasure = lastBar.measureNumber + 1;
+    const predicted = lastBar.time + trimmedMean;
 
     if (predicted >= totalDuration) break;
 
-    // Snap to nearest onset within threshold
+    // Check if user already annotated this measure
+    const userHit = userBars.find((b) => b.measureNumber === nextMeasure);
+
+    if (userHit) {
+      // User marked this measure → use their onset directly
+      const existingIdx = barLines.findIndex((b) => b.measureNumber === nextMeasure);
+      if (existingIdx >= 0) {
+        barLines[existingIdx] = { time: userHit.time, measureNumber: nextMeasure, confirmed: true };
+      } else {
+        barLines.push({ time: userHit.time, measureNumber: nextMeasure, confirmed: true });
+      }
+      lastConfirmedIdx = barLines.length - 1;
+      continue;
+    }
+
+    // Snap to nearest onset
     const snapped = findNearestOnset(notes, predicted, threshold);
 
     if (snapped !== null) {
-      barLines.push({ time: snapped, measureNumber: measureNum, confirmed: true });
-      const newBpm = 240 / (snapped - lastOnset);
-      bpmHistory.push(newBpm);
-      if (bpmHistory.length > HISTORY_WINDOW) bpmHistory.shift();
-      lastOnset = snapped;
+      barLines.push({ time: snapped, measureNumber: nextMeasure, confirmed: true });
     } else {
-      barLines.push({ time: predicted, measureNumber: measureNum, confirmed: false });
-      // Use predicted value as seed for next prediction
-      lastOnset = predicted;
+      barLines.push({ time: predicted, measureNumber: nextMeasure, confirmed: false });
     }
 
-    measureNum++;
+    lastConfirmedIdx = barLines.length - 1;
+
+    // Safety: limit iterations
+    if (barLines.length > 10000) break;
   }
 
-  const finalBpm = bpmHistory.reduce((a, b) => a + b, 0) / bpmHistory.length;
+  // Compute final BPM from trimmed mean of confirmed diffs
+  const confirmedDiffs = getConfirmedDiffs(barLines);
+  const finalMean = trimmedMeanDiff(confirmedDiffs);
+  const bpm = finalMean !== null ? Math.round((240 / finalMean) * 10) / 10 : 0;
 
-  return { bpm: Math.round(finalBpm * 10) / 10, barLines, bpmHistory };
+  return { bpm, barLines };
 }
 
-function getSortedDownbeats(
+/** Extract user-annotated bar lines sorted by measure number. */
+function getUserBarLines(
   annotations: Map<number, number>,
   notes: Note[]
-): { noteIndex: number; onset: number; measureNumber: number }[] {
-  const result: { noteIndex: number; onset: number; measureNumber: number }[] = [];
+): { time: number; measureNumber: number; confirmed: boolean }[] {
+  const result: { time: number; measureNumber: number; confirmed: boolean }[] = [];
   for (const [idx, measure] of annotations) {
-    result.push({ noteIndex: idx, onset: notes[idx].onset, measureNumber: measure });
+    result.push({ time: notes[idx].onset, measureNumber: measure, confirmed: true });
   }
   result.sort((a, b) => a.measureNumber - b.measureNumber);
   return result;
+}
+
+/** Get consecutive intervals between confirmed bar lines (sorted by measure). */
+function getConfirmedDiffs(barLines: BarLine[]): number[] {
+  const confirmed = barLines
+    .filter((b) => b.confirmed)
+    .sort((a, b) => a.measureNumber - b.measureNumber);
+
+  const diffs: number[] = [];
+  for (let i = 1; i < confirmed.length; i++) {
+    diffs.push(confirmed[i].time - confirmed[i - 1].time);
+  }
+  return diffs;
+}
+
+/**
+ * Trimmed mean: sort diffs, remove top/bottom TRIM_RATIO, average the rest.
+ * Returns null if not enough data after trimming (need >= 3 remaining).
+ */
+function trimmedMeanDiff(diffs: number[]): number | null {
+  if (diffs.length < 3) return null;
+
+  const sorted = [...diffs].sort((a, b) => a - b);
+  const trimCount = Math.max(1, Math.floor(sorted.length * TRIM_RATIO));
+
+  if (sorted.length - 2 * trimCount < 2) {
+    // Not enough after trimming → fall back to median
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  }
+
+  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+  return trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
 }
 
 function findNearestOnset(
