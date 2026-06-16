@@ -24,7 +24,7 @@ export interface PlayerState {
   sfActiveNotes: Set<number>;
 }
 
-const SCHEDULE_AHEAD = 0.05; // 50ms look-ahead
+const SCHEDULE_AHEAD = 0.05;
 
 function midiToFreq(pitch: number): number {
   return 440 * Math.pow(2, (pitch - 69) / 12);
@@ -53,39 +53,58 @@ export function createPlayerState(): PlayerState {
 function ensureAudioContext(state: PlayerState): AudioContext {
   if (!state.audioCtx) {
     state.audioCtx = new AudioContext();
+    console.log("[Audio] Created AudioContext, state:", state.audioCtx.state);
   }
   return state.audioCtx;
 }
 
 export async function initSoundFontPlayer(state: PlayerState): Promise<boolean> {
-  if (state.sfSynth) return true; // already initialized
+  if (state.sfSynth) {
+    console.log("[SF] Already initialized, skipping");
+    return true;
+  }
 
+  console.log("[SF] Starting SoundFont initialization...");
   try {
     const ctx = ensureAudioContext(state);
+    console.log("[SF] AudioContext state:", ctx.state);
 
     // Load worklet processor
+    console.log("[SF] Loading worklet processor...");
     await ctx.audioWorklet.addModule("./spessasynth_processor.min.js");
+    console.log("[SF] Worklet processor loaded");
 
-    // Fetch sf3 file
-    const response = await fetch("./MS Basic.sf3");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // Fetch sf2 file
+    console.log("[SF] Fetching SoundFont file (grand+piano.sf2)...");
+    const response = await fetch("./grand+piano.sf2");
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    console.log("[SF] SoundFont fetched, size:", response.headers.get("content-length") || "unknown");
+    console.log("[SF] Decoding SoundFont buffer...");
     const sfontBuffer = await response.arrayBuffer();
+    console.log("[SF] SoundFont buffer decoded, bytes:", sfontBuffer.byteLength);
 
     // Initialize synthesizer
+    console.log("[SF] Creating WorkletSynthesizer...");
     const synth = new WorkletSynthesizer(ctx);
+    console.log("[SF] Adding sound bank...");
     await synth.soundBankManager.addSoundBank(sfontBuffer, "main");
+    console.log("[SF] Waiting for synth to be ready...");
     await synth.isReady;
+    console.log("[SF] Synth ready!");
 
     // Set to Acoustic Grand Piano (program 0) on channel 0
     synth.programChange(state.sfChannel, 0);
+    console.log("[SF] Program set to Acoustic Grand Piano");
 
     state.sfSynth = synth;
     state.sfMode = "soundfont";
     state.sfLoadError = false;
-    console.log("SoundFont loaded successfully: MS Basic.sf3");
+    console.log("[SF] === SoundFont loaded successfully! ===");
     return true;
   } catch (err) {
-    console.warn("SoundFont load failed, falling back to square wave:", err);
+    console.error("[SF] Load FAILED:", err);
     state.sfSynth = null;
     state.sfMode = "square";
     state.sfLoadError = true;
@@ -102,6 +121,7 @@ function scheduleNotesSquare(state: PlayerState): void {
   const speed = state.playbackSpeed;
   const ctxNow = ctx.currentTime;
 
+  let scheduled = 0;
   for (let i = 0; i < state.notes.length; i++) {
     const note = state.notes[i];
 
@@ -113,9 +133,7 @@ function scheduleNotesSquare(state: PlayerState): void {
           active.gain.gain.setValueAtTime(active.gain.gain.value, ctxNow);
           active.gain.gain.exponentialRampToValueAtTime(0.001, ctxNow + 0.02);
           active.osc.stop(ctxNow + 0.03);
-        } catch {
-          // Already stopped
-        }
+        } catch { /* already stopped */ }
         state.activeOscs.delete(i);
       }
       continue;
@@ -150,9 +168,12 @@ function scheduleNotesSquare(state: PlayerState): void {
       osc.stop(noteEndInContext + 0.01);
 
       state.activeOscs.set(i, { osc, gain });
-    } catch {
-      // Ignore scheduling errors
-    }
+      scheduled++;
+    } catch { /* ignore */ }
+  }
+
+  if (scheduled > 0) {
+    console.log("[Square] Scheduled", scheduled, "notes");
   }
 }
 
@@ -164,27 +185,31 @@ function scheduleNotesSoundFont(state: PlayerState): void {
   const ahead = now + SCHEDULE_AHEAD;
   const ch = state.sfChannel;
 
+  let started = 0;
+  let stopped = 0;
+
   for (let i = 0; i < state.notes.length; i++) {
     const note = state.notes[i];
 
-    // Stop notes that are past
     if (note.offset <= now) {
       if (state.sfActiveNotes.has(i)) {
         synth.noteOff(ch, note.pitch);
         state.sfActiveNotes.delete(i);
+        stopped++;
       }
       continue;
     }
 
-    // Skip future notes
     if (note.onset > ahead) continue;
-
-    // Skip already playing
     if (state.sfActiveNotes.has(i)) continue;
 
-    // Play this note
     synth.noteOn(ch, note.pitch, note.velocity);
     state.sfActiveNotes.add(i);
+    started++;
+  }
+
+  if (started > 0 || stopped > 0) {
+    console.log("[SF] Notes started:", started, "stopped:", stopped);
   }
 }
 
@@ -197,17 +222,11 @@ function scheduleNotes(state: PlayerState): void {
 }
 
 function stopAllSound(state: PlayerState): void {
-  // Stop square wave oscillators
   for (const [, active] of state.activeOscs) {
-    try {
-      active.osc.stop();
-    } catch {
-      // Already stopped
-    }
+    try { active.osc.stop(); } catch { /* ok */ }
   }
   state.activeOscs.clear();
 
-  // Stop SoundFont notes
   if (state.sfSynth) {
     for (const noteIdx of state.sfActiveNotes) {
       const note = state.notes[noteIdx];
@@ -228,13 +247,13 @@ function playbackLoop(state: PlayerState): void {
 
   const clampedDelta = Math.min(deltaMs, 200);
   const deltaSec = (clampedDelta / 1000) * state.playbackSpeed;
-
   state.currentTime += deltaSec;
 
   if (state.currentTime >= state.totalDuration) {
     state.currentTime = state.totalDuration;
     state.isPlaying = false;
     stopAllSound(state);
+    console.log("[Playback] Reached end, stopped");
     if (state.onTick) state.onTick(state.currentTime);
     return;
   }
@@ -250,9 +269,12 @@ function playbackLoop(state: PlayerState): void {
 
 export async function startPlayback(state: PlayerState, notes: Note[], totalDuration: number): Promise<void> {
   const ctx = ensureAudioContext(state);
+  console.log("[Playback] startPlayback called. sfMode:", state.sfMode, "ctx.state:", ctx.state);
 
   if (ctx.state === "suspended") {
+    console.log("[Playback] Resuming suspended AudioContext...");
     await ctx.resume();
+    console.log("[Playback] AudioContext resumed, state now:", ctx.state);
   }
 
   state.notes = notes;
@@ -264,6 +286,7 @@ export async function startPlayback(state: PlayerState, notes: Note[], totalDura
 
   state.isPlaying = true;
   state.lastFrameTime = 0;
+  console.log("[Playback] Starting playback loop, notes:", notes.length, "duration:", totalDuration.toFixed(1));
   state.rafId = requestAnimationFrame(() => playbackLoop(state));
 }
 
