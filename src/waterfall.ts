@@ -148,7 +148,13 @@ export function renderWaterfall(state: WaterfallState): void {
 
     // Clamp drawing to visible area
     const drawX = Math.max(-pastWindowPixels, xStart);
-    const drawW = Math.min(noteWidth, W - drawX);
+    let drawW = Math.min(noteWidth, W - drawX);
+
+    // Past notes must not extend past the judgment line (x=0)
+    if (note.offset <= currentTime) {
+      drawW = Math.min(drawW, -drawX);
+    }
+
     if (drawW <= 0) continue;
 
     // Determine note color
