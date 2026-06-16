@@ -199,7 +199,10 @@ function init(): void {
       document.getElementById("sf-wrapper")!.style.display = "block";
 
       // Initialize time slider
-      initTimeSlider(canvasContainer, waterfallState!);
+      sliderBar = initTimeSlider(canvasContainer, waterfallState!);
+      sliderBar.timeDisplay.textContent = `0.0s / ${info.duration.toFixed(1)}s`;
+      // Hide sidebar time display (moved to slider bar)
+      elements!.timeDisplay.style.display = "none";
       renderWaterfall(waterfallState!);
 
       // Create AudioContext during user gesture (before async sf3 loading)

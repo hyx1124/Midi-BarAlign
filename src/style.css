@@ -46,28 +46,13 @@ body {
   flex: 1;
 }
 
-#time-slider {
-  display: none;
-  width: 100%;
-  height: 20px;
-  margin: 0;
-  padding: 0 10px;
-  border: none;
-  background: #fafafa;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-  border-top: 1px solid #eee;
-  box-sizing: border-box;
-}
-
-#time-slider::-webkit-slider-runnable-track {
+#slider-bar #time-slider::-webkit-slider-runnable-track {
   height: 4px;
   background: #e0e0e0;
   border-radius: 2px;
 }
 
-#time-slider::-webkit-slider-thumb {
+#slider-bar #time-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 12px;
@@ -78,14 +63,14 @@ body {
   cursor: pointer;
 }
 
-#time-slider::-moz-range-track {
+#slider-bar #time-slider::-moz-range-track {
   height: 4px;
   background: #e0e0e0;
   border-radius: 2px;
   border: none;
 }
 
-#time-slider::-moz-range-thumb {
+#slider-bar #time-slider::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;
