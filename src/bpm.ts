@@ -11,7 +11,6 @@ export interface BeatGrid {
   barLines: BarLine[];
 }
 
-const DEFAULT_THRESHOLD = 0.1;
 const LOCAL_WINDOW = 3;
 
 export function createBeatGrid(): BeatGrid {
@@ -20,8 +19,7 @@ export function createBeatGrid(): BeatGrid {
 
 export function buildBeatGrid(
   annotations: Map<number, number>,
-  notes: Note[],
-  threshold: number = DEFAULT_THRESHOLD
+  notes: Note[]
 ): BeatGrid | null {
   if (annotations.size < 5) return null;
 
@@ -55,17 +53,10 @@ export function buildBeatGrid(
       continue;
     }
 
-    // Phase 1: lowest-note heuristic
+    // Phase 1: lowest-note heuristic (only method for confirmed bar lines)
     const heuristicOnset = findBarByLowestNote(notes, predicted, T);
-    if (heuristicOnset !== null && Math.abs(heuristicOnset - predicted) <= threshold * 2) {
+    if (heuristicOnset !== null) {
       barLines.push({ time: heuristicOnset, measureNumber: nextMeasure, confirmed: true });
-      continue;
-    }
-
-    // Phase 2: fallback to onset snap
-    const snapped = findNearestOnset(notes, predicted, threshold);
-    if (snapped !== null) {
-      barLines.push({ time: snapped, measureNumber: nextMeasure, confirmed: true });
     } else {
       barLines.push({ time: predicted, measureNumber: nextMeasure, confirmed: false });
     }
@@ -121,7 +112,10 @@ function findBarByLowestNote(
     }
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    console.log(`[Heuristic] No active notes at any of 3 checkpoints near t=${predicted.toFixed(2)}`);
+    return null;
+  }
 
   let best = candidates[0];
   let bestDist = Math.abs(best - predicted);
@@ -132,6 +126,7 @@ function findBarByLowestNote(
       best = candidates[i];
     }
   }
+  console.log(`[Heuristic] t=${predicted.toFixed(2)} candidates=[${candidates.map(c => c.toFixed(2)).join(', ')}] → picked ${best.toFixed(2)} (dist=${bestDist.toFixed(3)}s)`);
   return best;
 }
 
@@ -145,21 +140,4 @@ function findLowestActiveNote(notes: Note[], moment: number): Note | null {
     }
   }
   return lowest;
-}
-
-function findNearestOnset(
-  notes: Note[],
-  target: number,
-  threshold: number
-): number | null {
-  let bestOnset: number | null = null;
-  let bestDist = Infinity;
-  for (const note of notes) {
-    const dist = Math.abs(note.onset - target);
-    if (dist <= threshold && dist < bestDist) {
-      bestDist = dist;
-      bestOnset = note.onset;
-    }
-  }
-  return bestOnset;
 }
