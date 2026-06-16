@@ -16,6 +16,8 @@ export interface SidebarElements {
   speedBtns: HTMLButtonElement[];
   timeDisplay: HTMLSpanElement;
   sfFallbackHint: HTMLDivElement;
+  sfFileLabel: HTMLLabelElement;
+  sfFileName: HTMLSpanElement;
   annotationSection: HTMLDivElement;
   annotationCount: HTMLSpanElement;
   resetBtn: HTMLButtonElement;
@@ -102,6 +104,37 @@ export function initSidebar(): SidebarElements {
     "display:none; padding:10px; background:#fef2f2; border:1px solid #fecaca; " +
     "border-radius:8px; color:#dc2626; font-size:13px; margin-bottom:20px;";
   sidebar.appendChild(errorBox);
+
+  // SoundFont file selector
+  const sfFileInput = document.createElement("input");
+  sfFileInput.type = "file";
+  sfFileInput.accept = ".sf2,.sf3";
+  sfFileInput.id = "sf-file-input";
+  sfFileInput.style.display = "none";
+
+  const sfFileLabel = document.createElement("label");
+  sfFileLabel.htmlFor = "sf-file-input";
+  sfFileLabel.textContent = "选择音色文件";
+  sfFileLabel.style.cssText =
+    "display:block; padding:6px 12px; border:1px solid #ddd; border-radius:8px; " +
+    "cursor:pointer; text-align:center; font-size:12px; color:#666; background:#fff; " +
+    "width:100%; box-sizing:border-box;";
+
+  sfFileLabel.addEventListener("mouseenter", () => { sfFileLabel.style.borderColor = "#999"; });
+  sfFileLabel.addEventListener("mouseleave", () => { sfFileLabel.style.borderColor = "#ddd"; });
+
+  const sfFileName = document.createElement("span");
+  sfFileName.textContent = "";
+  sfFileName.style.cssText = "display:block; color:#333; font-size:12px; margin-top:4px; text-align:center;";
+
+  const sfWrapper = document.createElement("div");
+  sfWrapper.id = "sf-wrapper";
+  sfWrapper.style.cssText = "display:none; margin-bottom: 16px;";
+  sfWrapper.appendChild(sfFileInput);
+  sfWrapper.appendChild(sfFileLabel);
+  sfWrapper.appendChild(sfFileName);
+
+  sidebar.appendChild(sfWrapper);
 
   // Zoom slider
   const zoomWrapper = document.createElement("div");
@@ -271,6 +304,8 @@ export function initSidebar(): SidebarElements {
     speedBtns,
     timeDisplay,
     sfFallbackHint,
+    sfFileLabel,
+    sfFileName,
     annotationSection,
     annotationCount,
     resetBtn,

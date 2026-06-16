@@ -58,10 +58,23 @@ function ensureAudioContext(state: PlayerState): AudioContext {
   return state.audioCtx;
 }
 
-export async function initSoundFontPlayer(state: PlayerState): Promise<boolean> {
-  if (state.sfSynth) {
+export async function initSoundFontPlayer(state: PlayerState, file?: File): Promise<boolean> {
+  if (state.sfSynth && !file) {
     console.log("[SF] Already initialized, skipping");
     return true;
+  }
+
+  // If switching soundfont, destroy old synth first
+  if (file && state.sfSynth) {
+    console.log("[SF] Switching SoundFont, destroying old synth...");
+    for (const noteIdx of state.sfActiveNotes) {
+      const note = state.notes[noteIdx];
+      if (note) state.sfSynth.noteOff(state.sfChannel, note.pitch);
+    }
+    state.sfActiveNotes.clear();
+    state.sfSynth.destroy();
+    state.sfSynth = null;
+    state.sfMode = "square";
   }
 
   console.log("[SF] Starting SoundFont initialization...");
@@ -69,20 +82,22 @@ export async function initSoundFontPlayer(state: PlayerState): Promise<boolean> 
     const ctx = ensureAudioContext(state);
     console.log("[SF] AudioContext state:", ctx.state);
 
-    // Load worklet processor
+    // Load worklet processor (idempotent if already loaded)
     console.log("[SF] Loading worklet processor...");
     await ctx.audioWorklet.addModule("./spessasynth_processor.min.js");
     console.log("[SF] Worklet processor loaded");
 
-    // Fetch sf2 file
-    console.log("[SF] Fetching SoundFont file (grand+piano.sf2)...");
-    const response = await fetch("./grand+piano.sf2");
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    // Load sf2/sf3 file
+    let sfontBuffer: ArrayBuffer;
+    if (file) {
+      console.log(`[SF] Reading local SoundFont file: ${file.name}...`);
+      sfontBuffer = await file.arrayBuffer();
+    } else {
+      console.log("[SF] Fetching default SoundFont file (grand+piano.sf2)...");
+      const response = await fetch("./grand+piano.sf2");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      sfontBuffer = await response.arrayBuffer();
     }
-    console.log("[SF] SoundFont fetched, size:", response.headers.get("content-length") || "unknown");
-    console.log("[SF] Decoding SoundFont buffer...");
-    const sfontBuffer = await response.arrayBuffer();
     console.log("[SF] SoundFont buffer decoded, bytes:", sfontBuffer.byteLength);
 
     // Initialize synthesizer

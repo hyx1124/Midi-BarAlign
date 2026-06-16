@@ -119,6 +119,27 @@ function init(): void {
 
   // --- File input ---
   const fileInput = document.getElementById("file-input") as HTMLInputElement;
+
+  // --- SoundFont file input ---
+  const sfFileInput = document.getElementById("sf-file-input") as HTMLInputElement;
+  sfFileInput.addEventListener("change", async () => {
+    const file = sfFileInput.files?.[0];
+    if (!file || !playerState) return;
+    elements!.sfFileLabel.textContent = file.name;
+    elements!.sfFileName.textContent = `加载中: ${file.name}`;
+    try {
+      const ok = await initSoundFontPlayer(playerState, file);
+      if (ok) {
+        elements!.sfFileName.textContent = file.name;
+        elements!.sfFallbackHint.style.display = "none";
+      } else {
+        elements!.sfFileName.textContent = `${file.name} (加载失败)`;
+      }
+    } catch {
+      elements!.sfFileName.textContent = `${file.name} (加载失败)`;
+    }
+  });
+
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     if (!file) return;
@@ -162,6 +183,9 @@ function init(): void {
 
       // Show playback controls
       document.getElementById("playback-section")!.style.display = "block";
+
+      // Show SoundFont selector
+      document.getElementById("sf-wrapper")!.style.display = "block";
 
       // Initialize time slider
       initTimeSlider(canvasContainer, waterfallState!);
