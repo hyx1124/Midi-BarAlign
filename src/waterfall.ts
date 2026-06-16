@@ -146,14 +146,14 @@ export function renderWaterfall(state: WaterfallState): void {
 
   ctx.restore(); // undo clip
 
-  // Draw time labels at bottom (absolute audio time, moves with waterfall)
+  // Draw time labels at bottom (fixed round numbers, scroll with waterfall)
   ctx.fillStyle = "#aaa";
   ctx.font = "10px -apple-system, sans-serif";
   ctx.textAlign = "center";
-  const timeStep = Math.max(1, Math.floor(visibleTimeWindow / 5));
-  for (let t = 0; t <= visibleTimeWindow; t += timeStep) {
-    const x = (t / visibleTimeWindow) * W;
-    const absTime = currentTime + t;
+  const labelStep = 3; // label every 3 seconds
+  const firstLabel = Math.ceil(currentTime / labelStep) * labelStep;
+  for (let absTime = firstLabel; absTime <= currentTime + visibleTimeWindow; absTime += labelStep) {
+    const x = ((absTime - currentTime) / visibleTimeWindow) * W;
     ctx.fillText(`${absTime.toFixed(0)}s`, x, H - 4);
   }
 

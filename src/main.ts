@@ -201,6 +201,10 @@ function init(): void {
       // Initialize time slider
       sliderBar = initTimeSlider(canvasContainer, waterfallState!);
       sliderBar.timeDisplay.textContent = `0.0s / ${info.duration.toFixed(1)}s`;
+      // Sync player time when slider is dragged
+      sliderBar.slider.addEventListener("input", () => {
+        if (playerState) playerState.currentTime = waterfallState!.currentTime;
+      });
       // Hide sidebar time display (moved to slider bar)
       elements!.timeDisplay.style.display = "none";
       renderWaterfall(waterfallState!);
