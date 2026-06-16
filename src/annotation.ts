@@ -65,3 +65,47 @@ function renumber(state: AnnotationState, notes: Note[]): void {
   }
   state.nextMeasureNumber = sorted.length + 1;
 }
+
+export interface AnnotationExport {
+  version: 1;
+  annotations: { measureNumber: number; onset: number; pitch: number }[];
+}
+
+export function exportAnnotations(
+  state: AnnotationState,
+  notes: Note[]
+): AnnotationExport {
+  const result: AnnotationExport = { version: 1, annotations: [] };
+  const sorted = getSortedAnnotations(state, notes);
+  for (const a of sorted) {
+    const note = notes[a.noteIndex];
+    result.annotations.push({
+      measureNumber: a.measureNumber,
+      onset: note.onset,
+      pitch: note.pitch,
+    });
+  }
+  return result;
+}
+
+/** Import annotations, matching by onset+pitch with 1ms/0 semitone tolerance. */
+export function importAnnotations(
+  data: AnnotationExport,
+  state: AnnotationState,
+  notes: Note[]
+): number {
+  clearAnnotations(state);
+  let imported = 0;
+  for (const entry of data.annotations) {
+    const idx = notes.findIndex(
+      (n) => Math.abs(n.onset - entry.onset) < 0.002 && n.pitch === entry.pitch
+    );
+    if (idx >= 0 && !state.annotations.has(idx)) {
+      state.annotations.set(idx, entry.measureNumber);
+      imported++;
+    }
+  }
+  // Renumber to clean up
+  renumber(state, notes);
+  return imported;
+}

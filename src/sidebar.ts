@@ -23,6 +23,8 @@ export interface SidebarElements {
   bpmDisplay: HTMLSpanElement;
   barLineCount: HTMLSpanElement;
   resetBtn: HTMLButtonElement;
+  exportBtn: HTMLButtonElement;
+  importBtn: HTMLButtonElement;
 }
 
 export function initSidebar(): SidebarElements {
@@ -316,6 +318,29 @@ export function initSidebar(): SidebarElements {
   });
 
   annotationSection.appendChild(resetBtn);
+
+  // Import/Export buttons
+  const ioRow = document.createElement("div");
+  ioRow.style.cssText = "display:flex; gap:8px; margin-top:8px;";
+
+  const exportBtn = document.createElement("button");
+  exportBtn.id = "export-btn";
+  exportBtn.textContent = "导出标注";
+  exportBtn.style.cssText =
+    "flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:8px; " +
+    "background:#fff; color:#666; cursor:pointer; font-size:12px; transition: all 0.2s;";
+
+  const importBtn = document.createElement("button");
+  importBtn.id = "import-btn";
+  importBtn.textContent = "导入标注";
+  importBtn.style.cssText =
+    "flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:8px; " +
+    "background:#fff; color:#666; cursor:pointer; font-size:12px; transition: all 0.2s;";
+
+  ioRow.appendChild(exportBtn);
+  ioRow.appendChild(importBtn);
+  annotationSection.appendChild(ioRow);
+
   sidebar.appendChild(annotationSection);
 
   return {
@@ -341,6 +366,8 @@ export function initSidebar(): SidebarElements {
     bpmDisplay,
     barLineCount,
     resetBtn,
+    exportBtn,
+    importBtn,
   };
 }
 

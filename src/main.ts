@@ -25,6 +25,8 @@ import {
   toggleAnnotation,
   clearAnnotations,
   getAnnotationCount,
+  exportAnnotations,
+  importAnnotations,
 } from "./annotation";
 import { buildBeatGrid, type BeatGrid } from "./bpm";
 
@@ -101,6 +103,46 @@ function init(): void {
     waterfallState.beatGrid = null;
     updateBpmDisplay(elements, null, 0);
     renderWaterfall(waterfallState);
+  });
+
+  // --- Annotation: export ---
+  elements.exportBtn.addEventListener("click", () => {
+    if (!annotationState || !midiInfo) return;
+    const data = exportAnnotations(annotationState, midiInfo.notes);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "annotations.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // --- Annotation: import ---
+  const importFileInput = document.createElement("input");
+  importFileInput.type = "file";
+  importFileInput.accept = ".json";
+  importFileInput.style.display = "none";
+  document.body.appendChild(importFileInput);
+
+  elements.importBtn.addEventListener("click", () => importFileInput.click());
+
+  importFileInput.addEventListener("change", async () => {
+    const file = importFileInput.files?.[0];
+    if (!file || !annotationState || !midiInfo || !waterfallState || !elements) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const imported = importAnnotations(data, annotationState, midiInfo.notes);
+      updateAnnotationCount(elements, getAnnotationCount(annotationState));
+      beatGrid = buildBeatGrid(annotationState.annotations, midiInfo.notes);
+      waterfallState.beatGrid = beatGrid;
+      updateBpmDisplay(elements, beatGrid?.bpm ?? null, beatGrid?.barLines.length ?? 0);
+      renderWaterfall(waterfallState);
+      console.log(`Imported ${imported} annotations`);
+    } catch (err) {
+      console.error("Import failed:", err);
+    }
   });
 
   // Player onTick: update waterfall and time display

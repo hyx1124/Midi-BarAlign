@@ -11,18 +11,13 @@ export interface BeatGrid {
   barLines: BarLine[];
 }
 
-const DEFAULT_THRESHOLD = 0.1; // 100ms
-const TRIM_RATIO = 0.2; // trim 20% from each end
+const DEFAULT_THRESHOLD = 0.1;
+const LOCAL_WINDOW = 3;
 
 export function createBeatGrid(): BeatGrid {
   return { bpm: 0, barLines: [] };
 }
 
-/**
- * Build a beat grid from user annotations + algorithm snap.
- * Uses trimmed-mean of inter-bar intervals for robust BPM estimation.
- * Requires at least 5 user-annotated downbeats.
- */
 export function buildBeatGrid(
   annotations: Map<number, number>,
   notes: Note[],
@@ -30,68 +25,63 @@ export function buildBeatGrid(
 ): BeatGrid | null {
   if (annotations.size < 5) return null;
 
-  // --- Phase 1: Collect user-annotated bar lines ---
   const userBars = getUserBarLines(annotations, notes);
   if (userBars.length < 5) return null;
 
   const totalDuration = notes[notes.length - 1]?.offset ?? 0;
-
-  // Seed with user annotations as the initial confirmed bar lines
   const barLines: BarLine[] = userBars.map((b) => ({ ...b }));
 
-  // --- Phase 2: Iteratively predict and snap ---
-  let lastConfirmedIdx = barLines.length - 1;
-
   while (true) {
-    const diffs = getConfirmedDiffs(barLines);
-    const trimmedMean = trimmedMeanDiff(diffs);
-    if (trimmedMean === null) break;
+    const confirmed = barLines.filter((b) => b.confirmed);
+    if (confirmed.length < LOCAL_WINDOW) break;
 
-    const lastBar = barLines[lastConfirmedIdx];
+    const recent = confirmed.slice(-LOCAL_WINDOW);
+    const T = (recent[recent.length - 1].time - recent[0].time) / (recent.length - 1);
+
+    const lastBar = barLines[barLines.length - 1];
     const nextMeasure = lastBar.measureNumber + 1;
-    const predicted = lastBar.time + trimmedMean;
+    const predicted = lastBar.time + T;
 
     if (predicted >= totalDuration) break;
 
-    // Check if user already annotated this measure
     const userHit = userBars.find((b) => b.measureNumber === nextMeasure);
-
     if (userHit) {
-      // User marked this measure → use their onset directly
       const existingIdx = barLines.findIndex((b) => b.measureNumber === nextMeasure);
       if (existingIdx >= 0) {
         barLines[existingIdx] = { time: userHit.time, measureNumber: nextMeasure, confirmed: true };
       } else {
         barLines.push({ time: userHit.time, measureNumber: nextMeasure, confirmed: true });
       }
-      lastConfirmedIdx = barLines.length - 1;
       continue;
     }
 
-    // Snap to nearest onset
-    const snapped = findNearestOnset(notes, predicted, threshold);
+    // Phase 1: lowest-note heuristic
+    const heuristicOnset = findBarByLowestNote(notes, predicted, T);
+    if (heuristicOnset !== null && Math.abs(heuristicOnset - predicted) <= threshold * 2) {
+      barLines.push({ time: heuristicOnset, measureNumber: nextMeasure, confirmed: true });
+      continue;
+    }
 
+    // Phase 2: fallback to onset snap
+    const snapped = findNearestOnset(notes, predicted, threshold);
     if (snapped !== null) {
       barLines.push({ time: snapped, measureNumber: nextMeasure, confirmed: true });
     } else {
       barLines.push({ time: predicted, measureNumber: nextMeasure, confirmed: false });
     }
 
-    lastConfirmedIdx = barLines.length - 1;
-
-    // Safety: limit iterations
     if (barLines.length > 10000) break;
   }
 
-  // Compute final BPM from trimmed mean of confirmed diffs
   const confirmedDiffs = getConfirmedDiffs(barLines);
-  const finalMean = trimmedMeanDiff(confirmedDiffs);
-  const bpm = finalMean !== null ? Math.round((240 / finalMean) * 10) / 10 : 0;
+  const displayBpm =
+    confirmedDiffs.length > 0
+      ? Math.round((240 / (confirmedDiffs.reduce((a, b) => a + b, 0) / confirmedDiffs.length)) * 10) / 10
+      : 0;
 
-  return { bpm, barLines };
+  return { bpm: displayBpm, barLines };
 }
 
-/** Extract user-annotated bar lines sorted by measure number. */
 function getUserBarLines(
   annotations: Map<number, number>,
   notes: Note[]
@@ -104,12 +94,10 @@ function getUserBarLines(
   return result;
 }
 
-/** Get consecutive intervals between confirmed bar lines (sorted by measure). */
 function getConfirmedDiffs(barLines: BarLine[]): number[] {
   const confirmed = barLines
     .filter((b) => b.confirmed)
     .sort((a, b) => a.measureNumber - b.measureNumber);
-
   const diffs: number[] = [];
   for (let i = 1; i < confirmed.length; i++) {
     diffs.push(confirmed[i].time - confirmed[i - 1].time);
@@ -117,26 +105,46 @@ function getConfirmedDiffs(barLines: BarLine[]): number[] {
   return diffs;
 }
 
-/**
- * Trimmed mean: sort diffs, remove top/bottom TRIM_RATIO, average the rest.
- * Returns null if not enough data after trimming (need >= 3 remaining).
- */
-function trimmedMeanDiff(diffs: number[]): number | null {
-  if (diffs.length < 3) return null;
+function findBarByLowestNote(
+  notes: Note[],
+  predicted: number,
+  barDuration: number
+): number | null {
+  const offsets = [-0.1, 0, 0.1];
+  const candidates: number[] = [];
 
-  const sorted = [...diffs].sort((a, b) => a - b);
-  const trimCount = Math.max(1, Math.floor(sorted.length * TRIM_RATIO));
-
-  if (sorted.length - 2 * trimCount < 2) {
-    // Not enough after trimming → fall back to median
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 === 0
-      ? (sorted[mid - 1] + sorted[mid]) / 2
-      : sorted[mid];
+  for (const offset of offsets) {
+    const moment = predicted + offset * barDuration;
+    const lowest = findLowestActiveNote(notes, moment);
+    if (lowest !== null) {
+      candidates.push(lowest.onset);
+    }
   }
 
-  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
-  return trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+  if (candidates.length === 0) return null;
+
+  let best = candidates[0];
+  let bestDist = Math.abs(best - predicted);
+  for (let i = 1; i < candidates.length; i++) {
+    const dist = Math.abs(candidates[i] - predicted);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = candidates[i];
+    }
+  }
+  return best;
+}
+
+function findLowestActiveNote(notes: Note[], moment: number): Note | null {
+  let lowest: Note | null = null;
+  for (const note of notes) {
+    if (note.onset <= moment && note.offset > moment) {
+      if (lowest === null || note.pitch < lowest.pitch) {
+        lowest = note;
+      }
+    }
+  }
+  return lowest;
 }
 
 function findNearestOnset(
@@ -146,7 +154,6 @@ function findNearestOnset(
 ): number | null {
   let bestOnset: number | null = null;
   let bestDist = Infinity;
-
   for (const note of notes) {
     const dist = Math.abs(note.onset - target);
     if (dist <= threshold && dist < bestDist) {
@@ -154,6 +161,5 @@ function findNearestOnset(
       bestOnset = note.onset;
     }
   }
-
   return bestOnset;
 }
