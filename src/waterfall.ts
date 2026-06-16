@@ -14,12 +14,9 @@ export interface WaterfallState {
 }
 
 const NOTE_RADIUS = 4;
-const PAST_WINDOW = 2;
 const JUDGMENT_LINE_COLOR = "#e74c3c";
 const JUDGMENT_LINE_WIDTH = 2;
 const FUTURE_NOTE_COLOR = "#222";
-const PAST_NOTE_COLOR = "#ccc";
-const PAST_NOTE_ALPHA = 0.4;
 const CROSSING_NOTE_COLOR = "#555";
 const GRID_LINE_COLOR = "#eee";
 const BG_COLOR = "#fff";
@@ -32,28 +29,10 @@ function pitchToNoteName(pitch: number): string {
   return `${name}${octave}`;
 }
 
-function findVisibleNoteRange(
-  notes: Note[],
-  timeMin: number,
-  timeMax: number
-): [number, number] {
-  // Use generous buffer for notes with long durations (>30s uncommon)
-  const searchMin = timeMin - 30;
+/** Find first note index where onset > timeMax, for right-bound filtering */
+function findEndIndex(notes: Note[], timeMax: number): number {
   let lo = 0;
   let hi = notes.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (notes[mid].onset < searchMin) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  const startIdx = lo;
-
-  // Binary search for first note whose onset > timeMax
-  lo = 0;
-  hi = notes.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
     if (notes[mid].onset <= timeMax) {
@@ -62,9 +41,7 @@ function findVisibleNoteRange(
       hi = mid;
     }
   }
-  const endIdx = lo;
-
-  return [startIdx, endIdx];
+  return lo;
 }
 
 function drawRoundedRect(
@@ -100,7 +77,6 @@ export function renderWaterfall(state: WaterfallState): void {
 
   const pitchCount = pitchMax - pitchMin + 1;
   const rowHeight = H / pitchCount;
-  const pastWindowPixels = (PAST_WINDOW / visibleTimeWindow) * W;
 
   // Draw grid lines
   ctx.strokeStyle = GRID_LINE_COLOR;
@@ -118,7 +94,7 @@ export function renderWaterfall(state: WaterfallState): void {
   ctx.font = "10px -apple-system, sans-serif";
   ctx.textAlign = "right";
   const shownLabels = new Set<number>();
-  const step = Math.max(1, Math.floor(pitchCount / 20)); // Show ~20 labels
+  const step = Math.max(1, Math.floor(pitchCount / 20));
   for (let i = 0; i <= pitchCount; i += step) {
     const pitch = pitchMax - i;
     const y = i * rowHeight + rowHeight * 0.7;
@@ -129,61 +105,46 @@ export function renderWaterfall(state: WaterfallState): void {
     }
   }
 
-  // Find visible notes
-  const timeMin = currentTime - PAST_WINDOW;
-  const timeMax = currentTime + visibleTimeWindow;
-  const [startIdx, endIdx] = findVisibleNoteRange(notes, timeMin, timeMax);
+  // Clip: hide everything left of the judgment line (x < 0)
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();
 
-  // Draw notes
-  for (let i = startIdx; i < endIdx; i++) {
+  // Render notes from start to visible window
+  const timeMax = currentTime + visibleTimeWindow;
+  const endIdx = findEndIndex(notes, timeMax);
+
+  for (let i = 0; i < endIdx; i++) {
     const note = notes[i];
-    if (note.offset <= currentTime - PAST_WINDOW) continue;
+
+    // Skip if completely past (right edge already behind judgment line)
+    const xEnd = ((note.offset - currentTime) / visibleTimeWindow) * W;
+    if (xEnd <= 0) continue;
 
     const xStart = ((note.onset - currentTime) / visibleTimeWindow) * W;
-    const xEnd = ((note.offset - currentTime) / visibleTimeWindow) * W;
     const noteWidth = Math.max(1, xEnd - xStart);
+    const drawW = Math.min(noteWidth, W - xStart);
+    if (drawW <= 0) continue;
 
     const rowTop = ((pitchMax - note.pitch) / pitchCount) * H;
     const noteHeight = rowHeight;
 
-    // Clamp drawing to visible area
-    const drawX = Math.max(-pastWindowPixels, xStart);
-    let drawW = Math.min(noteWidth, W - drawX);
-
-    // Past notes must not extend past the judgment line (x=0)
-    if (note.offset <= currentTime) {
-      drawW = Math.min(drawW, -drawX);
-    }
-
-    if (drawW <= 0) continue;
-
-    // Determine note color
-    if (note.offset <= currentTime) {
-      // Fully past the judgment line
-      ctx.globalAlpha = PAST_NOTE_ALPHA;
-      ctx.fillStyle = PAST_NOTE_COLOR;
-    } else if (note.onset >= currentTime) {
-      // Fully in the future
+    // Color: future vs crossing
+    if (note.onset >= currentTime) {
       ctx.globalAlpha = 1;
       ctx.fillStyle = FUTURE_NOTE_COLOR;
     } else {
-      // Currently crossing the judgment line
       ctx.globalAlpha = 1;
       ctx.fillStyle = CROSSING_NOTE_COLOR;
     }
 
-    drawRoundedRect(ctx, drawX, rowTop + 1, drawW, noteHeight - 2, NOTE_RADIUS);
+    drawRoundedRect(ctx, xStart, rowTop + 1, drawW, noteHeight - 2, NOTE_RADIUS);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
 
-  // Draw judgment line
-  ctx.strokeStyle = JUDGMENT_LINE_COLOR;
-  ctx.lineWidth = JUDGMENT_LINE_WIDTH;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, H);
-  ctx.stroke();
+  ctx.restore(); // undo clip
 
   // Draw time labels at bottom
   ctx.fillStyle = "#aaa";
@@ -194,6 +155,14 @@ export function renderWaterfall(state: WaterfallState): void {
     const x = (t / visibleTimeWindow) * W;
     ctx.fillText(`${t.toFixed(0)}s`, x, H - 4);
   }
+
+  // Draw judgment line (on top of everything, full height)
+  ctx.strokeStyle = JUDGMENT_LINE_COLOR;
+  ctx.lineWidth = JUDGMENT_LINE_WIDTH;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, H);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -222,7 +191,6 @@ export function initWaterfall(container: HTMLElement): WaterfallState {
     const dpr = window.devicePixelRatio || 1;
     const rect = container.getBoundingClientRect();
     const w = rect.width;
-    // Subtract slider height (20px) if visible
     const h = rect.height - 20;
     state.displayWidth = w;
     state.displayHeight = Math.max(1, h);
