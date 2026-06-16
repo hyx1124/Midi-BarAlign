@@ -25,6 +25,7 @@ import {
   toggleAnnotation,
   clearAnnotations,
   getAnnotationCount,
+  getSortedAnnotations,
   exportAnnotations,
   importAnnotations,
 } from "./annotation";
@@ -93,6 +94,45 @@ function init(): void {
 
     renderWaterfall(waterfallState);
   };
+
+  // --- Annotation: confirm button ---
+  elements.confirmBtn.addEventListener("click", () => {
+    if (!annotationState || !beatGrid || !midiInfo || !waterfallState || !elements) return;
+
+    const currentTime = waterfallState.currentTime;
+    let added = 0;
+
+    for (const bar of beatGrid.barLines) {
+      if (bar.time >= currentTime) continue;
+      if (!bar.confirmed) continue;
+
+      // Find note matching bar time (2ms tolerance)
+      const idx = midiInfo.notes.findIndex(
+        (n) => Math.abs(n.onset - bar.time) < 0.002
+      );
+      if (idx < 0) continue;
+      if (annotationState.annotations.has(idx)) continue;
+
+      annotationState.annotations.set(idx, bar.measureNumber);
+      added++;
+    }
+
+    if (added > 0) {
+      // Renumber to keep consistency
+      const sorted = getSortedAnnotations(annotationState, midiInfo.notes);
+      let num = 1;
+      for (const { noteIndex } of sorted) {
+        annotationState.annotations.set(noteIndex, num++);
+      }
+      annotationState.nextMeasureNumber = num;
+
+      updateAnnotationCount(elements, getAnnotationCount(annotationState));
+      beatGrid = buildBeatGrid(annotationState.annotations, midiInfo.notes);
+      waterfallState.beatGrid = beatGrid;
+      updateBpmDisplay(elements, beatGrid?.bpm ?? null, beatGrid?.barLines.length ?? 0);
+      renderWaterfall(waterfallState);
+    }
+  });
 
   // --- Annotation: reset button ---
   elements.resetBtn.addEventListener("click", () => {

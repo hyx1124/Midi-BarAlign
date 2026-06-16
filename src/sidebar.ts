@@ -23,6 +23,7 @@ export interface SidebarElements {
   bpmDisplay: HTMLSpanElement;
   barLineCount: HTMLSpanElement;
   resetBtn: HTMLButtonElement;
+  confirmBtn: HTMLButtonElement;
   exportBtn: HTMLButtonElement;
   importBtn: HTMLButtonElement;
 }
@@ -302,6 +303,22 @@ export function initSidebar(): SidebarElements {
   countRow.appendChild(annotationCount);
   annotationSection.appendChild(countRow);
 
+  const confirmBtn = document.createElement("button");
+  confirmBtn.id = "confirm-btn";
+  confirmBtn.textContent = "确认至此";
+  confirmBtn.style.cssText =
+    "width:100%; margin-top:12px; padding:8px 16px; border:1px solid #ddd; border-radius:8px; " +
+    "background:#fff; color:#333; cursor:pointer; font-size:13px; transition: all 0.2s;";
+  confirmBtn.addEventListener("mouseenter", () => {
+    confirmBtn.style.borderColor = "#6A89A7";
+    confirmBtn.style.color = "#6A89A7";
+  });
+  confirmBtn.addEventListener("mouseleave", () => {
+    confirmBtn.style.borderColor = "#ddd";
+    confirmBtn.style.color = "#333";
+  });
+  annotationSection.appendChild(confirmBtn);
+
   const resetBtn = document.createElement("button");
   resetBtn.id = "reset-btn";
   resetBtn.textContent = "清除标注";
@@ -366,6 +383,7 @@ export function initSidebar(): SidebarElements {
     bpmDisplay,
     barLineCount,
     resetBtn,
+    confirmBtn,
     exportBtn,
     importBtn,
   };
