@@ -188,4 +188,23 @@ function init(): void {
   });
 }
 
+// Debug: expose on window for console testing
+(window as any).__midiDisplay__ = {
+  get playerState() { return playerState!; },
+  get midiInfo() { return midiInfo!; },
+  testNote: async (pitch = 60, velocity = 100) => {
+    const ps = playerState;
+    if (!ps || !ps.sfSynth) {
+      console.log("No synth available, sfMode:", ps?.sfMode);
+      return;
+    }
+    console.log(`[Test] Playing note: pitch=${pitch}, velocity=${velocity}`);
+    ps.sfSynth.noteOn(0, pitch, velocity);
+    setTimeout(() => {
+      ps.sfSynth?.noteOff(0, pitch);
+      console.log("[Test] Note stopped");
+    }, 1000);
+  },
+};
+
 document.addEventListener("DOMContentLoaded", init);

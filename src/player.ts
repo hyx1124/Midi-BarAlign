@@ -88,6 +88,8 @@ export async function initSoundFontPlayer(state: PlayerState): Promise<boolean> 
     // Initialize synthesizer
     console.log("[SF] Creating WorkletSynthesizer...");
     const synth = new WorkletSynthesizer(ctx);
+    synth.connect(ctx.destination);
+    console.log("[SF] Connected synth to AudioContext.destination");
     console.log("[SF] Adding sound bank...");
     await synth.soundBankManager.addSoundBank(sfontBuffer, "main");
     console.log("[SF] Waiting for synth to be ready...");
