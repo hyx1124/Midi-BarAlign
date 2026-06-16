@@ -1,0 +1,95 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  background: #fff;
+  color: #333;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+#sidebar {
+  flex: 1;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 24px 20px;
+  border-right: 1px solid #eee;
+  overflow-y: auto;
+  background: #fff;
+}
+
+#canvas-container {
+  flex: 2;
+  position: relative;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#canvas-container canvas {
+  display: block;
+  flex: 1;
+}
+
+#time-slider {
+  display: none;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  padding: 0 10px;
+  border: none;
+  background: #fafafa;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  border-top: 1px solid #eee;
+  box-sizing: border-box;
+}
+
+#time-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+}
+
+#time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  margin-top: -4px;
+  cursor: pointer;
+}
+
+#time-slider::-moz-range-track {
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  border: none;
+}
+
+#time-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  border: none;
+  cursor: pointer;
+}
