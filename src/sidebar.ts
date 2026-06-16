@@ -8,6 +8,13 @@ export interface SidebarElements {
   pitchRange: HTMLSpanElement;
   duration: HTMLSpanElement;
   errorBox: HTMLDivElement;
+  zoomSlider: HTMLInputElement;
+  zoomValue: HTMLSpanElement;
+  playBtn: HTMLButtonElement;
+  resetTimeBtn: HTMLButtonElement;
+  speedGroup: HTMLDivElement;
+  speedBtns: HTMLButtonElement[];
+  timeDisplay: HTMLSpanElement;
   annotationSection: HTMLDivElement;
   annotationCount: HTMLSpanElement;
   resetBtn: HTMLButtonElement;
@@ -95,7 +102,112 @@ export function initSidebar(): SidebarElements {
     "border-radius:8px; color:#dc2626; font-size:13px; margin-bottom:20px;";
   sidebar.appendChild(errorBox);
 
-  // Annotation section (placeholder for Section 3)
+  // Zoom slider
+  const zoomWrapper = document.createElement("div");
+  zoomWrapper.id = "zoom-wrapper";
+  zoomWrapper.style.cssText = "display:none; margin-bottom: 20px;";
+
+  const zoomLabelRow = document.createElement("div");
+  zoomLabelRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;";
+
+  const zoomLabel = document.createElement("span");
+  zoomLabel.textContent = "视图缩放";
+  zoomLabel.style.cssText = "color:#888; font-size:13px;";
+
+  const zoomValue = document.createElement("span");
+  zoomValue.id = "zoom-value";
+  zoomValue.textContent = "15s";
+  zoomValue.style.cssText = "color:#333; font-size:13px; font-weight:500;";
+
+  zoomLabelRow.appendChild(zoomLabel);
+  zoomLabelRow.appendChild(zoomValue);
+
+  const zoomSlider = document.createElement("input");
+  zoomSlider.type = "range";
+  zoomSlider.id = "zoom-slider";
+  zoomSlider.min = "3";
+  zoomSlider.max = "60";
+  zoomSlider.step = "1";
+  zoomSlider.value = "15";
+  zoomSlider.style.cssText =
+    "width:100%; margin:0; -webkit-appearance:none; appearance:none; " +
+    "height:4px; background:#e0e0e0; border-radius:2px; outline:none; cursor:pointer;";
+  // Note: thumb styling applied via style.css because inline pseudo-elements don't work
+
+  zoomWrapper.appendChild(zoomLabelRow);
+  zoomWrapper.appendChild(zoomSlider);
+  sidebar.appendChild(zoomWrapper);
+
+  // Playback controls
+  const playbackSection = document.createElement("div");
+  playbackSection.id = "playback-section";
+  playbackSection.style.cssText = "display:none; margin-bottom: 20px; border-top: 1px solid #eee; padding-top: 16px;";
+
+  const playbackLabel = document.createElement("div");
+  playbackLabel.textContent = "播放控制";
+  playbackLabel.style.cssText = "color:#888; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom: 10px;";
+  playbackSection.appendChild(playbackLabel);
+
+  // Play + Reset buttons row
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex; gap:8px; margin-bottom: 12px;";
+
+  const playBtn = document.createElement("button");
+  playBtn.id = "play-btn";
+  playBtn.textContent = "▶ 播放";
+  playBtn.style.cssText =
+    "flex:2; padding:8px 12px; border:1px solid #ddd; border-radius:8px; " +
+    "background:#fff; color:#333; cursor:pointer; font-size:13px; transition: all 0.2s;";
+  const resetTimeBtn = document.createElement("button");
+  resetTimeBtn.id = "reset-time-btn";
+  resetTimeBtn.textContent = "↺ 开头";
+  resetTimeBtn.style.cssText =
+    "flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; " +
+    "background:#fff; color:#666; cursor:pointer; font-size:13px; transition: all 0.2s;";
+
+  btnRow.appendChild(playBtn);
+  btnRow.appendChild(resetTimeBtn);
+  playbackSection.appendChild(btnRow);
+
+  // Speed buttons
+  const speedLabel = document.createElement("span");
+  speedLabel.textContent = "速度";
+  speedLabel.style.cssText = "color:#888; font-size:12px; display:block; margin-bottom: 4px;";
+  playbackSection.appendChild(speedLabel);
+
+  const speedGroup = document.createElement("div");
+  speedGroup.id = "speed-group";
+  speedGroup.style.cssText = "display:flex; gap:4px; margin-bottom: 12px;";
+
+  const speeds = [0.5, 1, 1.5, 2];
+  const speedBtns: HTMLButtonElement[] = [];
+  for (const s of speeds) {
+    const btn = document.createElement("button");
+    btn.textContent = `${s}x`;
+    btn.dataset.speed = String(s);
+    btn.style.cssText =
+      "flex:1; padding:4px 8px; border:1px solid #ddd; border-radius:6px; " +
+      "background:#fff; color:#666; cursor:pointer; font-size:12px; transition: all 0.2s;";
+    if (s === 1) {
+      btn.style.borderColor = "#aaa";
+      btn.style.color = "#333";
+      btn.style.fontWeight = "600";
+    }
+    speedGroup.appendChild(btn);
+    speedBtns.push(btn);
+  }
+  playbackSection.appendChild(speedGroup);
+
+  // Time display
+  const timeDisplay = document.createElement("div");
+  timeDisplay.id = "time-display";
+  timeDisplay.textContent = "0.0s / 0.0s";
+  timeDisplay.style.cssText = "text-align:center; color:#888; font-size:12px;";
+  playbackSection.appendChild(timeDisplay);
+
+  sidebar.appendChild(playbackSection);
+
+  // Annotation section (placeholder for Section 4)
   const annotationSection = document.createElement("div");
   annotationSection.id = "annotation-section";
   annotationSection.style.cssText = "display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px;";
@@ -142,6 +254,13 @@ export function initSidebar(): SidebarElements {
     pitchRange: spans["pitch-range"] as HTMLSpanElement,
     duration: spans["duration"] as HTMLSpanElement,
     errorBox,
+    zoomSlider,
+    zoomValue,
+    playBtn,
+    resetTimeBtn,
+    speedGroup,
+    speedBtns,
+    timeDisplay,
     annotationSection,
     annotationCount,
     resetBtn,

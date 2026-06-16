@@ -285,6 +285,11 @@ export function initTimeSlider(
   return slider;
 }
 
+export function setVisibleTimeWindow(state: WaterfallState, seconds: number): void {
+  state.visibleTimeWindow = seconds;
+  renderWaterfall(state);
+}
+
 export function setWaterfallNotes(
   state: WaterfallState,
   notes: Note[],

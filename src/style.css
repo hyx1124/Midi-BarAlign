@@ -93,3 +93,36 @@ body {
   border: none;
   cursor: pointer;
 }
+
+#zoom-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+}
+
+#zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  margin-top: -4px;
+  cursor: pointer;
+}
+
+#zoom-slider::-moz-range-track {
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  border: none;
+}
+
+#zoom-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  border: none;
+  cursor: pointer;
+}
