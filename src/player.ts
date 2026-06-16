@@ -248,11 +248,11 @@ function playbackLoop(state: PlayerState): void {
   state.rafId = requestAnimationFrame(() => playbackLoop(state));
 }
 
-export function startPlayback(state: PlayerState, notes: Note[], totalDuration: number): void {
+export async function startPlayback(state: PlayerState, notes: Note[], totalDuration: number): Promise<void> {
   const ctx = ensureAudioContext(state);
 
   if (ctx.state === "suspended") {
-    ctx.resume();
+    await ctx.resume();
   }
 
   state.notes = notes;

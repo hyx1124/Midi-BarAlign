@@ -82,12 +82,12 @@ function init(): void {
   };
 
   // --- Play/Pause ---
-  elements.playBtn.addEventListener("click", () => {
+  elements.playBtn.addEventListener("click", async () => {
     if (!playerState || !midiInfo) return;
     if (playerState.isPlaying) {
       pausePlayback(playerState);
     } else {
-      startPlayback(playerState, midiInfo.notes, midiInfo.duration);
+      await startPlayback(playerState, midiInfo.notes, midiInfo.duration);
     }
     updatePlayPauseBtn();
   });
