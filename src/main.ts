@@ -14,6 +14,7 @@ import {
   stopPlayback,
   setSpeed,
   getFormattedTime,
+  initSoundFontPlayer,
 } from "./player";
 import type { MidiInfo } from "./types";
 import type { WaterfallState } from "./waterfall";
@@ -165,6 +166,13 @@ function init(): void {
       // Initialize time slider
       initTimeSlider(canvasContainer, waterfallState!);
       renderWaterfall(waterfallState!);
+
+      // Load SoundFont asynchronously (non-blocking)
+      initSoundFontPlayer(playerState!).then((ok) => {
+        if (!ok && elements) {
+          elements.sfFallbackHint.style.display = "block";
+        }
+      });
 
       console.log("Parsed MIDI notes:", info.notes);
     } catch (err) {

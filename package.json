@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node -e \"const fs=require('fs');fs.copyFileSync('node_modules/spessasynth_lib/dist/spessasynth_processor.min.js','public/spessasynth_processor.min.js')\""
   },
   "dependencies": {
-    "@tonejs/midi": "^2.0.28"
+    "@tonejs/midi": "^2.0.28",
+    "spessasynth_lib": "^4.3.7"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

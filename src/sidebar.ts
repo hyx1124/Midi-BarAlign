@@ -15,6 +15,7 @@ export interface SidebarElements {
   speedGroup: HTMLDivElement;
   speedBtns: HTMLButtonElement[];
   timeDisplay: HTMLSpanElement;
+  sfFallbackHint: HTMLDivElement;
   annotationSection: HTMLDivElement;
   annotationCount: HTMLSpanElement;
   resetBtn: HTMLButtonElement;
@@ -205,6 +206,14 @@ export function initSidebar(): SidebarElements {
   timeDisplay.style.cssText = "text-align:center; color:#888; font-size:12px;";
   playbackSection.appendChild(timeDisplay);
 
+  // Fallback hint (hidden by default)
+  const sfFallbackHint = document.createElement("div");
+  sfFallbackHint.id = "sf-fallback-hint";
+  sfFallbackHint.textContent = "钢琴音色加载失败，已使用合成器音色";
+  sfFallbackHint.style.cssText =
+    "display:none; color:#aaa; font-size:11px; text-align:center; margin-top:4px;";
+  playbackSection.appendChild(sfFallbackHint);
+
   sidebar.appendChild(playbackSection);
 
   // Annotation section (placeholder for Section 4)
@@ -261,6 +270,7 @@ export function initSidebar(): SidebarElements {
     speedGroup,
     speedBtns,
     timeDisplay,
+    sfFallbackHint,
     annotationSection,
     annotationCount,
     resetBtn,
