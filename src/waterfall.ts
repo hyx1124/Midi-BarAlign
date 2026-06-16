@@ -1,4 +1,5 @@
 import type { Note } from "./types";
+import type { BeatGrid } from "./bpm";
 
 export interface WaterfallState {
   canvas: HTMLCanvasElement;
@@ -13,6 +14,7 @@ export interface WaterfallState {
   visibleTimeWindow: number;
   annotations: Map<number, number> | null;
   onNoteClick: ((noteIndex: number) => void) | null;
+  beatGrid: BeatGrid | null;
 }
 
 const NOTE_RADIUS = 4;
@@ -152,6 +154,30 @@ export function renderWaterfall(state: WaterfallState): void {
 
   ctx.restore(); // undo clip
 
+  // Draw bar lines
+  if (state.beatGrid) {
+    for (const bar of state.beatGrid.barLines) {
+      const x = ((bar.time - currentTime) / visibleTimeWindow) * W;
+      if (x < 0 || x > W) continue;
+
+      ctx.strokeStyle = bar.confirmed ? "#ddd" : "#e5e5e5";
+      ctx.lineWidth = 1;
+
+      if (!bar.confirmed) {
+        ctx.setLineDash([4, 4]);
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+
+      if (!bar.confirmed) {
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
   // Draw time labels at bottom (fixed round numbers, scroll with waterfall)
   ctx.fillStyle = "#aaa";
   ctx.font = "10px -apple-system, sans-serif";
@@ -194,6 +220,7 @@ export function initWaterfall(container: HTMLElement): WaterfallState {
     visibleTimeWindow: 15,
     annotations: null,
     onNoteClick: null,
+    beatGrid: null,
   };
 
   function resize(): void {

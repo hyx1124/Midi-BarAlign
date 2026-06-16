@@ -1,5 +1,5 @@
 import { parseMidiFile } from "./midiParser";
-import { initSidebar, updateMidiInfo, showError, showAnnotationSection, updateAnnotationCount } from "./sidebar";
+import { initSidebar, updateMidiInfo, showError, showAnnotationSection, updateAnnotationCount, updateBpmDisplay } from "./sidebar";
 import {
   initWaterfall,
   setWaterfallNotes,
@@ -26,6 +26,7 @@ import {
   clearAnnotations,
   getAnnotationCount,
 } from "./annotation";
+import { buildBeatGrid, type BeatGrid } from "./bpm";
 
 let midiInfo: MidiInfo | null = null;
 let waterfallState: WaterfallState | null = null;
@@ -33,6 +34,7 @@ let playerState: PlayerState | null = null;
 let elements: SidebarElements | null = null;
 let sliderBar: SliderBar | null = null;
 let annotationState: AnnotationState | null = null;
+let beatGrid: BeatGrid | null = null;
 
 export function getMidiInfo(): MidiInfo | null {
   return midiInfo;
@@ -81,6 +83,12 @@ function init(): void {
     if (!annotationState || !waterfallState || !midiInfo || !elements) return;
     toggleAnnotation(annotationState, noteIndex, midiInfo.notes);
     updateAnnotationCount(elements, getAnnotationCount(annotationState));
+
+    // Rebuild beat grid if enough annotations
+    beatGrid = buildBeatGrid(annotationState.annotations, midiInfo.notes);
+    waterfallState.beatGrid = beatGrid;
+    updateBpmDisplay(elements, beatGrid?.bpm ?? null, beatGrid?.barLines.length ?? 0);
+
     renderWaterfall(waterfallState);
   };
 
@@ -89,6 +97,9 @@ function init(): void {
     if (!annotationState || !waterfallState || !elements) return;
     clearAnnotations(annotationState);
     updateAnnotationCount(elements, 0);
+    beatGrid = null;
+    waterfallState.beatGrid = null;
+    updateBpmDisplay(elements, null, 0);
     renderWaterfall(waterfallState);
   });
 

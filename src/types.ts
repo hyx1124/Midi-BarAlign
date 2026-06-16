@@ -24,3 +24,5 @@ export interface AnnotationState {
   annotations: Map<number, number>;
   nextMeasureNumber: number;
 }
+
+export { type BarLine, type BeatGrid } from "./bpm";

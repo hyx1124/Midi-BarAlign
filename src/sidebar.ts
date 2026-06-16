@@ -20,6 +20,8 @@ export interface SidebarElements {
   sfFileName: HTMLSpanElement;
   annotationSection: HTMLDivElement;
   annotationCount: HTMLSpanElement;
+  bpmDisplay: HTMLSpanElement;
+  barLineCount: HTMLSpanElement;
   resetBtn: HTMLButtonElement;
 }
 
@@ -254,6 +256,34 @@ export function initSidebar(): SidebarElements {
   annotationSection.id = "annotation-section";
   annotationSection.style.cssText = "display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px;";
 
+  // BPM display
+  const bpmRow = document.createElement("div");
+  bpmRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:6px;";
+  const bpmLabel = document.createElement("span");
+  bpmLabel.textContent = "BPM";
+  bpmLabel.style.cssText = "color:#888;";
+  const bpmDisplay = document.createElement("span");
+  bpmDisplay.id = "bpm-display";
+  bpmDisplay.textContent = "--";
+  bpmDisplay.style.cssText = "color:#333; font-weight:500;";
+  bpmRow.appendChild(bpmLabel);
+  bpmRow.appendChild(bpmDisplay);
+  annotationSection.appendChild(bpmRow);
+
+  // Bar line count
+  const barRow = document.createElement("div");
+  barRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:8px;";
+  const barLabel = document.createElement("span");
+  barLabel.textContent = "小节线";
+  barLabel.style.cssText = "color:#888;";
+  const barLineCount = document.createElement("span");
+  barLineCount.id = "barline-count";
+  barLineCount.textContent = "0 条";
+  barLineCount.style.cssText = "color:#333; font-weight:500;";
+  barRow.appendChild(barLabel);
+  barRow.appendChild(barLineCount);
+  annotationSection.appendChild(barRow);
+
   const countRow = document.createElement("div");
   countRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; font-size:13px;";
 
@@ -308,6 +338,8 @@ export function initSidebar(): SidebarElements {
     sfFileName,
     annotationSection,
     annotationCount,
+    bpmDisplay,
+    barLineCount,
     resetBtn,
   };
 }
@@ -333,4 +365,9 @@ export function showAnnotationSection(elements: SidebarElements): void {
 
 export function updateAnnotationCount(elements: SidebarElements, count: number): void {
   elements.annotationCount.textContent = `${count} 个小节`;
+}
+
+export function updateBpmDisplay(elements: SidebarElements, bpm: number | null, barLineCount: number): void {
+  elements.bpmDisplay.textContent = bpm !== null ? `≈ ${bpm}` : "--";
+  elements.barLineCount.textContent = `${barLineCount} 条`;
 }
